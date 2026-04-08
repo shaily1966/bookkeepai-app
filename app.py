@@ -472,96 +472,6 @@ with st.sidebar.expander("➕ Add Rule"):
 st.title("📊 BookKeep AI Pro")
 st.caption(f"v{VERSION} | 31 Banks & Cards | Client Profiles | Rule Editor | Merchant Normalization | T5018 | CCA Classes | Validation Engine | Claude 4.6 | ~${per_request:.3f}/statement")
 
-# ═══════════════════════════════════════════════════════════════════
-# DEMO MODE — Pre-built sample data, zero API cost
-# ═══════════════════════════════════════════════════════════════════
-with st.expander("🎯 Try a Free Demo — No Upload Required", expanded=False):
-    st.markdown("""
-    **See exactly what BookKeep AI Pro produces** — before uploading your own statement.  
-    This demo uses a realistic TD Business Chequing statement for a construction client (Ontario).  
-    Click below to generate a full 10-tab Excel instantly — **no PDF upload needed, zero API cost.**
-    """)
-    if st.button("🚀 Run Demo Statement", type="primary", use_container_width=True):
-        demo_transactions = [
-            {"date":"2025-01-03","source":"TD Business Chequing","description":"PETRO CANADA #4821 BRAMPTON ON","debit":82.40,"credit":0,"balance":0,"type":"PURCHASE","category":"Motor Vehicle Expense","t2125":"9281","biz_pct":100,"itc_rule":"Full","itc_amount":9.50,"confidence":"95","notes":""},
-            {"date":"2025-01-06","source":"TD Business Chequing","description":"HOME DEPOT #7823 BRAMPTON ON","debit":347.82,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":40.11,"confidence":"92","notes":""},
-            {"date":"2025-01-08","source":"TD Business Chequing","description":"TIM HORTONS #0912 BRAMPTON ON","debit":18.75,"credit":0,"balance":0,"type":"PURCHASE","category":"Meals & Entertainment","t2125":"8523","biz_pct":50,"itc_rule":"50%","itc_amount":1.08,"confidence":"95","notes":"MEALS_50_RULE"},
-            {"date":"2025-01-10","source":"TD Business Chequing","description":"WSIB ONTARIO PMT 28374","debit":420.00,"credit":0,"balance":0,"type":"FEE","category":"Government Remittances","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
-            {"date":"2025-01-12","source":"TD Business Chequing","description":"AMZN MKTP CA*Z99335U2","debit":124.99,"credit":0,"balance":0,"type":"PURCHASE","category":"\u2753 Uncategorized","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"65","notes":"VERIFY_RECEIPT_AMAZON"},
-            {"date":"2025-01-14","source":"TD Business Chequing","description":"COSTCO WHOLESALE W126 MISSISSAUGA ON","debit":231.74,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":26.71,"confidence":"91","notes":""},
-            {"date":"2025-01-15","source":"TD Business Chequing","description":"INTERAC E-TFR MIKE JOHNSON","debit":650.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Subcontracts","t2125":"8590","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"88","notes":"T5018_CANDIDATE"},
-            {"date":"2025-01-17","source":"TD Business Chequing","description":"BELL CANADA 8003102355","debit":89.99,"credit":0,"balance":0,"type":"PURCHASE","category":"Utilities","t2125":"8220","biz_pct":100,"itc_rule":"Full","itc_amount":10.37,"confidence":"95","notes":""},
-            {"date":"2025-01-20","source":"TD Business Chequing","description":"RONA #7234 BRAMPTON ON","debit":412.55,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":47.55,"confidence":"93","notes":""},
-            {"date":"2025-01-22","source":"TD Business Chequing","description":"CANADIAN TIRE #0234 BRAMPTON ON","debit":156.30,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":18.02,"confidence":"88","notes":""},
-            {"date":"2025-01-24","source":"TD Business Chequing","description":"DEWALT TOOLS #8831 TORONTO ON","debit":612.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":70.55,"confidence":"93","notes":"CCA_ASSET CCA_CLASS_8"},
-            {"date":"2025-01-25","source":"TD Business Chequing","description":"TD SERVICE FEE","debit":16.95,"credit":0,"balance":0,"type":"FEE","category":"Bank Charges","t2125":"8710","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
-            {"date":"2025-01-27","source":"TD Business Chequing","description":"WALMART #3821 BRAMPTON ON","debit":87.43,"credit":0,"balance":0,"type":"PURCHASE","category":"\u2753 Uncategorized","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"62","notes":""},
-            {"date":"2025-01-28","source":"TD Business Chequing","description":"ESSO #4421 MISSISSAUGA ON","debit":94.20,"credit":0,"balance":0,"type":"PURCHASE","category":"Motor Vehicle Expense","t2125":"9281","biz_pct":100,"itc_rule":"Full","itc_amount":10.86,"confidence":"95","notes":""},
-            {"date":"2025-01-29","source":"TD Business Chequing","description":"SUBWAY #32981 BRAMPTON ON","debit":23.45,"credit":0,"balance":0,"type":"PURCHASE","category":"Meals & Entertainment","t2125":"8523","biz_pct":50,"itc_rule":"50%","itc_amount":1.35,"confidence":"95","notes":"MEALS_50_RULE"},
-            {"date":"2025-01-30","source":"TD Business Chequing","description":"E-TRANSFER RECEIVED CLIENT PMT","debit":0,"credit":4500.00,"balance":0,"type":"PAYMENT","category":"","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
-            {"date":"2025-01-31","source":"TD Business Chequing","description":"HOME DEPOT #7823 BRAMPTON ON","debit":189.90,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":21.89,"confidence":"92","notes":""},
-            {"date":"2025-02-03","source":"TD Business Chequing","description":"INTERAC E-TFR STEVE WILLIAMS","debit":800.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Subcontracts","t2125":"8590","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"88","notes":"T5018_CANDIDATE"},
-            {"date":"2025-02-05","source":"TD Business Chequing","description":"STAPLES #1234 BRAMPTON ON","debit":67.80,"credit":0,"balance":0,"type":"PURCHASE","category":"Office Supplies","t2125":"8810","biz_pct":100,"itc_rule":"Full","itc_amount":7.81,"confidence":"94","notes":""},
-            {"date":"2025-02-07","source":"TD Business Chequing","description":"HYDRO ONE NETWORKS INC","debit":234.56,"credit":0,"balance":0,"type":"PURCHASE","category":"Utilities","t2125":"8220","biz_pct":100,"itc_rule":"Full","itc_amount":27.03,"confidence":"95","notes":""},
-        ]
-
-        demo_t5018 = [
-            {"payee":"MIKE JOHNSON","count":1,"total":650.00,"t5018_required":True},
-            {"payee":"STEVE WILLIAMS","count":1,"total":800.00,"t5018_required":True},
-        ]
-
-        T2125_MAP = {
-            "Motor Vehicle Expense": "9281", "Meals & Entertainment": "8523",
-            "Office Supplies": "8810", "Utilities": "8220", "Bank Charges": "8710",
-            "Insurance": "8690", "Materials & Supplies": "8811", "Rent": "8910",
-            "Delivery & Shipping": "8730", "Advertising": "8520",
-            "Travel": "9200", "Professional Fees": "8860", "Subcontracts": "8590",
-            "Cost of Goods": "8320", "Repairs & Maintenance": "8960",
-        }
-        BIZ_USE = {"Motor Vehicle Expense": 100, "Meals & Entertainment": 50, "Owner Draw / Personal": 0}
-
-        _wb = build_excel(
-            demo_transactions, [],
-            {"period": "Jan-Feb 2025", "transactions": str(len(demo_transactions))},
-            "Demo Construction Co.", "Construction/Trades", "Ontario", "Jan-Feb 2025",
-            recon_matches=None, recon_unmatched=None, receipt_matches=None,
-            invoice_data=None, validation_results=None,
-            t5018_data=demo_t5018, validation_report=None,
-            anomalies=None, audit_trail=None
-        )
-
-        import io as _io
-        _buf = _io.BytesIO()
-        _wb.save(_buf)
-        _buf.seek(0)
-
-        total_exp_d = sum(t["debit"] for t in demo_transactions if t["debit"])
-        total_itc_d = sum(t.get("itc_amount",0) for t in demo_transactions)
-        needs_review_d = len([t for t in demo_transactions if "Uncategorized" in t.get("category","")])
-
-        st.success(f"\u2705 Demo complete! {len(demo_transactions)} transactions — 10-tab Excel ready to download.")
-        _dc1, _dc2, _dc3, _dc4 = st.columns(4)
-        _dc1.metric("Transactions", len(demo_transactions))
-        _dc2.metric("Total Expenses", f"${total_exp_d:,.2f}")
-        _dc3.metric("HST ITC Claimable", f"${total_itc_d:,.2f}")
-        _dc4.metric("Needs Review", needs_review_d)
-
-        st.info("\U0001f4cb **2 T5018 subcontractor payments** flagged (Mike Johnson $650 + Steve Williams $800) · **1 CCA asset** detected (DeWalt Tools $612 \u2192 Class 8) · **2 items** in Needs Review (Amazon + Walmart \u2014 ambiguous without receipts)")
-
-        st.download_button(
-            "\u2b07\ufe0f Download Demo Excel \u2014 10 Tabs, CRA-Ready",
-            data=_buf,
-            file_name=f"Demo_Construction_BookKeepAI_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            use_container_width=True
-        )
-        st.markdown("---")
-        st.markdown("**Ready to process your own statement?** Upload a PDF above and click Process Statement \u2014 results in under 2 minutes.")
-
-
-
-# ── STEP 1: BUSINESS INFO ──────────────────────────────────────────
 st.header("1️⃣ Business Info")
 
 # v3.8: Client profile loader
@@ -1928,6 +1838,97 @@ def build_excel(transactions, flags, summary, biz_name, industry_str, province_s
 # ═══════════════════════════════════════════════════════════════════
 # STEP 3: PROCESS
 # ═══════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════
+# DEMO MODE — Pre-built sample data, zero API cost
+# ═══════════════════════════════════════════════════════════════════
+with st.expander("🎯 Try a Free Demo — No Upload Required", expanded=False):
+    st.markdown("""
+    **See exactly what BookKeep AI Pro produces** — before uploading your own statement.  
+    This demo uses a realistic TD Business Chequing statement for a construction client (Ontario).  
+    Click below to generate a full 10-tab Excel instantly — **no PDF upload needed, zero API cost.**
+    """)
+    if st.button("🚀 Run Demo Statement", type="primary", use_container_width=True):
+        demo_transactions = [
+            {"date":"2025-01-03","source":"TD Business Chequing","description":"PETRO CANADA #4821 BRAMPTON ON","debit":82.40,"credit":0,"balance":0,"type":"PURCHASE","category":"Motor Vehicle Expense","t2125":"9281","biz_pct":100,"itc_rule":"Full","itc_amount":9.50,"confidence":"95","notes":""},
+            {"date":"2025-01-06","source":"TD Business Chequing","description":"HOME DEPOT #7823 BRAMPTON ON","debit":347.82,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":40.11,"confidence":"92","notes":""},
+            {"date":"2025-01-08","source":"TD Business Chequing","description":"TIM HORTONS #0912 BRAMPTON ON","debit":18.75,"credit":0,"balance":0,"type":"PURCHASE","category":"Meals & Entertainment","t2125":"8523","biz_pct":50,"itc_rule":"50%","itc_amount":1.08,"confidence":"95","notes":"MEALS_50_RULE"},
+            {"date":"2025-01-10","source":"TD Business Chequing","description":"WSIB ONTARIO PMT 28374","debit":420.00,"credit":0,"balance":0,"type":"FEE","category":"Government Remittances","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
+            {"date":"2025-01-12","source":"TD Business Chequing","description":"AMZN MKTP CA*Z99335U2","debit":124.99,"credit":0,"balance":0,"type":"PURCHASE","category":"\u2753 Uncategorized","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"65","notes":"VERIFY_RECEIPT_AMAZON"},
+            {"date":"2025-01-14","source":"TD Business Chequing","description":"COSTCO WHOLESALE W126 MISSISSAUGA ON","debit":231.74,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":26.71,"confidence":"91","notes":""},
+            {"date":"2025-01-15","source":"TD Business Chequing","description":"INTERAC E-TFR MIKE JOHNSON","debit":650.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Subcontracts","t2125":"8590","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"88","notes":"T5018_CANDIDATE"},
+            {"date":"2025-01-17","source":"TD Business Chequing","description":"BELL CANADA 8003102355","debit":89.99,"credit":0,"balance":0,"type":"PURCHASE","category":"Utilities","t2125":"8220","biz_pct":100,"itc_rule":"Full","itc_amount":10.37,"confidence":"95","notes":""},
+            {"date":"2025-01-20","source":"TD Business Chequing","description":"RONA #7234 BRAMPTON ON","debit":412.55,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":47.55,"confidence":"93","notes":""},
+            {"date":"2025-01-22","source":"TD Business Chequing","description":"CANADIAN TIRE #0234 BRAMPTON ON","debit":156.30,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":18.02,"confidence":"88","notes":""},
+            {"date":"2025-01-24","source":"TD Business Chequing","description":"DEWALT TOOLS #8831 TORONTO ON","debit":612.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":70.55,"confidence":"93","notes":"CCA_ASSET CCA_CLASS_8"},
+            {"date":"2025-01-25","source":"TD Business Chequing","description":"TD SERVICE FEE","debit":16.95,"credit":0,"balance":0,"type":"FEE","category":"Bank Charges","t2125":"8710","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
+            {"date":"2025-01-27","source":"TD Business Chequing","description":"WALMART #3821 BRAMPTON ON","debit":87.43,"credit":0,"balance":0,"type":"PURCHASE","category":"\u2753 Uncategorized","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"62","notes":""},
+            {"date":"2025-01-28","source":"TD Business Chequing","description":"ESSO #4421 MISSISSAUGA ON","debit":94.20,"credit":0,"balance":0,"type":"PURCHASE","category":"Motor Vehicle Expense","t2125":"9281","biz_pct":100,"itc_rule":"Full","itc_amount":10.86,"confidence":"95","notes":""},
+            {"date":"2025-01-29","source":"TD Business Chequing","description":"SUBWAY #32981 BRAMPTON ON","debit":23.45,"credit":0,"balance":0,"type":"PURCHASE","category":"Meals & Entertainment","t2125":"8523","biz_pct":50,"itc_rule":"50%","itc_amount":1.35,"confidence":"95","notes":"MEALS_50_RULE"},
+            {"date":"2025-01-30","source":"TD Business Chequing","description":"E-TRANSFER RECEIVED CLIENT PMT","debit":0,"credit":4500.00,"balance":0,"type":"PAYMENT","category":"","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
+            {"date":"2025-01-31","source":"TD Business Chequing","description":"HOME DEPOT #7823 BRAMPTON ON","debit":189.90,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":21.89,"confidence":"92","notes":""},
+            {"date":"2025-02-03","source":"TD Business Chequing","description":"INTERAC E-TFR STEVE WILLIAMS","debit":800.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Subcontracts","t2125":"8590","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"88","notes":"T5018_CANDIDATE"},
+            {"date":"2025-02-05","source":"TD Business Chequing","description":"STAPLES #1234 BRAMPTON ON","debit":67.80,"credit":0,"balance":0,"type":"PURCHASE","category":"Office Supplies","t2125":"8810","biz_pct":100,"itc_rule":"Full","itc_amount":7.81,"confidence":"94","notes":""},
+            {"date":"2025-02-07","source":"TD Business Chequing","description":"HYDRO ONE NETWORKS INC","debit":234.56,"credit":0,"balance":0,"type":"PURCHASE","category":"Utilities","t2125":"8220","biz_pct":100,"itc_rule":"Full","itc_amount":27.03,"confidence":"95","notes":""},
+        ]
+
+        demo_t5018 = [
+            {"payee":"MIKE JOHNSON","count":1,"total":650.00,"t5018_required":True},
+            {"payee":"STEVE WILLIAMS","count":1,"total":800.00,"t5018_required":True},
+        ]
+
+        T2125_MAP = {
+            "Motor Vehicle Expense": "9281", "Meals & Entertainment": "8523",
+            "Office Supplies": "8810", "Utilities": "8220", "Bank Charges": "8710",
+            "Insurance": "8690", "Materials & Supplies": "8811", "Rent": "8910",
+            "Delivery & Shipping": "8730", "Advertising": "8520",
+            "Travel": "9200", "Professional Fees": "8860", "Subcontracts": "8590",
+            "Cost of Goods": "8320", "Repairs & Maintenance": "8960",
+        }
+        BIZ_USE = {"Motor Vehicle Expense": 100, "Meals & Entertainment": 50, "Owner Draw / Personal": 0}
+
+        _wb = build_excel(
+            demo_transactions, [],
+            {"period": "Jan-Feb 2025", "transactions": str(len(demo_transactions))},
+            "Demo Construction Co.", "Construction/Trades", "Ontario", "Jan-Feb 2025",
+            recon_matches=None, recon_unmatched=None, receipt_matches=None,
+            invoice_data=None, validation_results=None,
+            t5018_data=demo_t5018, validation_report=None,
+            anomalies=None, audit_trail=None
+        )
+
+        import io as _io
+        _buf = _io.BytesIO()
+        _wb.save(_buf)
+        _buf.seek(0)
+
+        total_exp_d = sum(t["debit"] for t in demo_transactions if t["debit"])
+        total_itc_d = sum(t.get("itc_amount",0) for t in demo_transactions)
+        needs_review_d = len([t for t in demo_transactions if "Uncategorized" in t.get("category","")])
+
+        st.success(f"\u2705 Demo complete! {len(demo_transactions)} transactions — 10-tab Excel ready to download.")
+        _dc1, _dc2, _dc3, _dc4 = st.columns(4)
+        _dc1.metric("Transactions", len(demo_transactions))
+        _dc2.metric("Total Expenses", f"${total_exp_d:,.2f}")
+        _dc3.metric("HST ITC Claimable", f"${total_itc_d:,.2f}")
+        _dc4.metric("Needs Review", needs_review_d)
+
+        st.info("\U0001f4cb **2 T5018 subcontractor payments** flagged (Mike Johnson $650 + Steve Williams $800) · **1 CCA asset** detected (DeWalt Tools $612 \u2192 Class 8) · **2 items** in Needs Review (Amazon + Walmart \u2014 ambiguous without receipts)")
+
+        st.download_button(
+            "\u2b07\ufe0f Download Demo Excel \u2014 10 Tabs, CRA-Ready",
+            data=_buf,
+            file_name=f"Demo_Construction_BookKeepAI_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True
+        )
+        st.markdown("---")
+        st.markdown("**Ready to process your own statement?** Upload a PDF above and click Process Statement \u2014 results in under 2 minutes.")
+
+
+
+# ── STEP 1: BUSINESS INFO ──────────────────────────────────────────
+
 st.header("3️⃣ Generate Report")
 
 if st.button("🚀 Process Statement(s)", type="primary", use_container_width=True):
