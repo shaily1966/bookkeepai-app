@@ -4,6 +4,19 @@ import pdfplumber
 import os, time, json, re, io, base64, logging
 from datetime import datetime
 from exports import build_quickbooks_csv, build_xero_csv
+from vendor_statements import process_vendor_statements, add_vendor_items_tab
+from client_data import (
+    save_statement, load_client_statements,
+    render_client_history, render_save_button, render_all_clients_dashboard
+)
+from compliance_score import compute_compliance_score, render_compliance_report
+from db import get_conn, is_postgres, placeholder, upsert_sql, now_sql, create_all_tables
+
+# ── Ensure all DB tables exist on every startup ──────────────────────
+try:
+    create_all_tables()
+except Exception as _db_err:
+    pass  # Logged inside create_all_tables — app continues
 from bank_schemas import (
     detect_and_parse, detect_bank, get_supported_banks,
     pre_categorize_merchant, clean_description, detect_province_from_text,
@@ -20,7 +33,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
-VERSION = "3.11"
+VERSION = "3.12"
 logger = logging.getLogger("bookkeep_ai")
 logging.basicConfig(level=logging.WARNING)
 
@@ -34,13 +47,12 @@ logging.basicConfig(level=logging.WARNING)
 # back up and restore their learned corrections.
 # ═══════════════════════════════════════════════════════════════════
 
-import sqlite3
-
-MEMORY_DB = "vendor_memory.db"
+# SQLite replaced by db.py — Postgres in production, SQLite locally
+MEMORY_DB = "vendor_memory.db"  # kept for legacy reference only
 
 def _get_db():
     """Return a SQLite connection, creating the table if needed."""
-    conn = sqlite3.connect(MEMORY_DB, check_same_thread=False)
+    conn = get_conn()
     conn.execute(
         "CREATE TABLE IF NOT EXISTS vendor_memory "
         "(key TEXT PRIMARY KEY, category TEXT, updated TEXT)"
@@ -127,7 +139,7 @@ def import_vendor_memory_json(data_bytes):
 
 def _get_clients_db():
     """Return SQLite connection with clients + rules tables."""
-    conn = sqlite3.connect(MEMORY_DB, check_same_thread=False)
+    conn = get_conn()
     conn.execute(
         "CREATE TABLE IF NOT EXISTS clients ("
         "id INTEGER PRIMARY KEY AUTOINCREMENT, "
@@ -318,7 +330,8 @@ for k, v in {"transactions": None, "flags": [], "summary": {}, "pass_number": 0,
              "raw_response": "", "total_cost": 0, "receipts_data": [], "detected_bank": "",
              "recon_matches": [], "recon_unmatched": [], "receipt_matches": [], "invoice_data": [],
              "validation_results": [], "validation_report": [], "anomalies": [],
-             "t5018_data": [], "coverage_info": {}, "normalization_count": 0, "audit_trail": []}.items():
+             "t5018_data": [], "coverage_info": {}, "normalization_count": 0, "audit_trail": [],
+             "vendor_items": []}.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -418,7 +431,7 @@ if mem_count > 0:
         st.session_state.vendor_memory = {}
         try:
             import sqlite3
-            conn = sqlite3.connect(MEMORY_DB, check_same_thread=False)
+            conn = get_conn()
             conn.execute("DELETE FROM vendor_memory")
             conn.commit(); conn.close()
         except Exception:
@@ -472,6 +485,96 @@ with st.sidebar.expander("➕ Add Rule"):
 st.title("📊 BookKeep AI Pro")
 st.caption(f"v{VERSION} | 31 Banks & Cards | Client Profiles | Rule Editor | Merchant Normalization | T5018 | CCA Classes | Validation Engine | Claude 4.6 | ~${per_request:.3f}/statement")
 
+# ═══════════════════════════════════════════════════════════════════
+# DEMO MODE — Pre-built sample data, zero API cost
+# ═══════════════════════════════════════════════════════════════════
+with st.expander("🎯 Try a Free Demo — No Upload Required", expanded=False):
+    st.markdown("""
+    **See exactly what BookKeep AI Pro produces** — before uploading your own statement.  
+    This demo uses a realistic TD Business Chequing statement for a construction client (Ontario).  
+    Click below to generate a full 10-tab Excel instantly — **no PDF upload needed, zero API cost.**
+    """)
+    if st.button("🚀 Run Demo Statement", type="primary", use_container_width=True):
+        demo_transactions = [
+            {"date":"2025-01-03","source":"TD Business Chequing","description":"PETRO CANADA #4821 BRAMPTON ON","debit":82.40,"credit":0,"balance":0,"type":"PURCHASE","category":"Motor Vehicle Expense","t2125":"9281","biz_pct":100,"itc_rule":"Full","itc_amount":9.50,"confidence":"95","notes":""},
+            {"date":"2025-01-06","source":"TD Business Chequing","description":"HOME DEPOT #7823 BRAMPTON ON","debit":347.82,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":40.11,"confidence":"92","notes":""},
+            {"date":"2025-01-08","source":"TD Business Chequing","description":"TIM HORTONS #0912 BRAMPTON ON","debit":18.75,"credit":0,"balance":0,"type":"PURCHASE","category":"Meals & Entertainment","t2125":"8523","biz_pct":50,"itc_rule":"50%","itc_amount":1.08,"confidence":"95","notes":"MEALS_50_RULE"},
+            {"date":"2025-01-10","source":"TD Business Chequing","description":"WSIB ONTARIO PMT 28374","debit":420.00,"credit":0,"balance":0,"type":"FEE","category":"Government Remittances","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
+            {"date":"2025-01-12","source":"TD Business Chequing","description":"AMZN MKTP CA*Z99335U2","debit":124.99,"credit":0,"balance":0,"type":"PURCHASE","category":"\u2753 Uncategorized","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"65","notes":"VERIFY_RECEIPT_AMAZON"},
+            {"date":"2025-01-14","source":"TD Business Chequing","description":"COSTCO WHOLESALE W126 MISSISSAUGA ON","debit":231.74,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":26.71,"confidence":"91","notes":""},
+            {"date":"2025-01-15","source":"TD Business Chequing","description":"INTERAC E-TFR MIKE JOHNSON","debit":650.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Subcontracts","t2125":"8590","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"88","notes":"T5018_CANDIDATE"},
+            {"date":"2025-01-17","source":"TD Business Chequing","description":"BELL CANADA 8003102355","debit":89.99,"credit":0,"balance":0,"type":"PURCHASE","category":"Utilities","t2125":"8220","biz_pct":100,"itc_rule":"Full","itc_amount":10.37,"confidence":"95","notes":""},
+            {"date":"2025-01-20","source":"TD Business Chequing","description":"RONA #7234 BRAMPTON ON","debit":412.55,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":47.55,"confidence":"93","notes":""},
+            {"date":"2025-01-22","source":"TD Business Chequing","description":"CANADIAN TIRE #0234 BRAMPTON ON","debit":156.30,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":18.02,"confidence":"88","notes":""},
+            {"date":"2025-01-24","source":"TD Business Chequing","description":"DEWALT TOOLS #8831 TORONTO ON","debit":612.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":70.55,"confidence":"93","notes":"CCA_ASSET CCA_CLASS_8"},
+            {"date":"2025-01-25","source":"TD Business Chequing","description":"TD SERVICE FEE","debit":16.95,"credit":0,"balance":0,"type":"FEE","category":"Bank Charges","t2125":"8710","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
+            {"date":"2025-01-27","source":"TD Business Chequing","description":"WALMART #3821 BRAMPTON ON","debit":87.43,"credit":0,"balance":0,"type":"PURCHASE","category":"\u2753 Uncategorized","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"62","notes":""},
+            {"date":"2025-01-28","source":"TD Business Chequing","description":"ESSO #4421 MISSISSAUGA ON","debit":94.20,"credit":0,"balance":0,"type":"PURCHASE","category":"Motor Vehicle Expense","t2125":"9281","biz_pct":100,"itc_rule":"Full","itc_amount":10.86,"confidence":"95","notes":""},
+            {"date":"2025-01-29","source":"TD Business Chequing","description":"SUBWAY #32981 BRAMPTON ON","debit":23.45,"credit":0,"balance":0,"type":"PURCHASE","category":"Meals & Entertainment","t2125":"8523","biz_pct":50,"itc_rule":"50%","itc_amount":1.35,"confidence":"95","notes":"MEALS_50_RULE"},
+            {"date":"2025-01-30","source":"TD Business Chequing","description":"E-TRANSFER RECEIVED CLIENT PMT","debit":0,"credit":4500.00,"balance":0,"type":"PAYMENT","category":"","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
+            {"date":"2025-01-31","source":"TD Business Chequing","description":"HOME DEPOT #7823 BRAMPTON ON","debit":189.90,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":21.89,"confidence":"92","notes":""},
+            {"date":"2025-02-03","source":"TD Business Chequing","description":"INTERAC E-TFR STEVE WILLIAMS","debit":800.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Subcontracts","t2125":"8590","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"88","notes":"T5018_CANDIDATE"},
+            {"date":"2025-02-05","source":"TD Business Chequing","description":"STAPLES #1234 BRAMPTON ON","debit":67.80,"credit":0,"balance":0,"type":"PURCHASE","category":"Office Supplies","t2125":"8810","biz_pct":100,"itc_rule":"Full","itc_amount":7.81,"confidence":"94","notes":""},
+            {"date":"2025-02-07","source":"TD Business Chequing","description":"HYDRO ONE NETWORKS INC","debit":234.56,"credit":0,"balance":0,"type":"PURCHASE","category":"Utilities","t2125":"8220","biz_pct":100,"itc_rule":"Full","itc_amount":27.03,"confidence":"95","notes":""},
+        ]
+
+        demo_t5018 = [
+            {"payee":"MIKE JOHNSON","count":1,"total":650.00,"t5018_required":True},
+            {"payee":"STEVE WILLIAMS","count":1,"total":800.00,"t5018_required":True},
+        ]
+
+        T2125_MAP = {
+            "Motor Vehicle Expense": "9281", "Meals & Entertainment": "8523",
+            "Office Supplies": "8810", "Utilities": "8220", "Bank Charges": "8710",
+            "Insurance": "8690", "Materials & Supplies": "8811", "Rent": "8910",
+            "Delivery & Shipping": "8730", "Advertising": "8520",
+            "Travel": "9200", "Professional Fees": "8860", "Subcontracts": "8590",
+            "Cost of Goods": "8320", "Repairs & Maintenance": "8960",
+        }
+        BIZ_USE = {"Motor Vehicle Expense": 100, "Meals & Entertainment": 50, "Owner Draw / Personal": 0}
+
+        _wb = build_excel(
+            demo_transactions, [],
+            {"period": "Jan-Feb 2025", "transactions": str(len(demo_transactions))},
+            "Demo Construction Co.", "Construction/Trades", "Ontario", "Jan-Feb 2025",
+            recon_matches=None, recon_unmatched=None, receipt_matches=None,
+            invoice_data=None, validation_results=None,
+            t5018_data=demo_t5018, validation_report=None,
+            anomalies=None, audit_trail=None
+        )
+
+        import io as _io
+        _buf = _io.BytesIO()
+        _wb.save(_buf)
+        _buf.seek(0)
+
+        total_exp_d = sum(t["debit"] for t in demo_transactions if t["debit"])
+        total_itc_d = sum(t.get("itc_amount",0) for t in demo_transactions)
+        needs_review_d = len([t for t in demo_transactions if "Uncategorized" in t.get("category","")])
+
+        st.success(f"\u2705 Demo complete! {len(demo_transactions)} transactions — 10-tab Excel ready to download.")
+        _dc1, _dc2, _dc3, _dc4 = st.columns(4)
+        _dc1.metric("Transactions", len(demo_transactions))
+        _dc2.metric("Total Expenses", f"${total_exp_d:,.2f}")
+        _dc3.metric("HST ITC Claimable", f"${total_itc_d:,.2f}")
+        _dc4.metric("Needs Review", needs_review_d)
+
+        st.info("\U0001f4cb **2 T5018 subcontractor payments** flagged (Mike Johnson $650 + Steve Williams $800) · **1 CCA asset** detected (DeWalt Tools $612 \u2192 Class 8) · **2 items** in Needs Review (Amazon + Walmart \u2014 ambiguous without receipts)")
+
+        st.download_button(
+            "\u2b07\ufe0f Download Demo Excel \u2014 10 Tabs, CRA-Ready",
+            data=_buf,
+            file_name=f"Demo_Construction_BookKeepAI_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
+            use_container_width=True
+        )
+        st.markdown("---")
+        st.markdown("**Ready to process your own statement?** Upload a PDF above and click Process Statement \u2014 results in under 2 minutes.")
+
+
+
+# ── STEP 1: BUSINESS INFO ──────────────────────────────────────────
 st.header("1️⃣ Business Info")
 
 # v3.8: Client profile loader
@@ -535,6 +638,17 @@ if _del_btn and _selected_client != "— New Client —":
     else:
         st.error("Failed to delete profile.")
 
+# ── CLIENT HISTORY (v3.12) ───────────────────────────────────────────
+if _selected_client != "— New Client —":
+    client_stmts = load_client_statements(_selected_client)
+    if client_stmts:
+        with st.expander(
+            f"🗂 {_selected_client} — {len(client_stmts)} saved statement(s) · "
+            f"Click to view history, reload, or export",
+            expanded=False
+        ):
+            render_client_history(_selected_client, st)
+
 # ── STEP 2: UPLOAD ──────────────────────────────────────────────────
 st.header("2️⃣ Upload Files")
 c1, c2, c3 = st.columns(3)
@@ -547,6 +661,17 @@ with c2:
 with c3:
     invoice_files = st.file_uploader("📋 Invoices — Accounts Payable",
         type=["pdf","png","jpg","jpeg"], accept_multiple_files=True, key="inv")
+
+# ── Vendor Statements (4th slot) ─────────────────────────────────────
+st.info(
+    "🏪 **Vendor Statements** — Upload Amazon Business CSV, Costco purchase history, "
+    "Home Depot Pro, Sysco, Grainger, or any supplier PDF/CSV for line-item categorization. "
+    "Eliminates guesswork on Amazon/Costco transactions — each product line categorized individually."
+)
+vendor_statement_files = st.file_uploader(
+    "🏪 Vendor Statements — Amazon Business, Costco, Home Depot, Sysco, any supplier...",
+    type=["pdf","csv","tsv"], accept_multiple_files=True, key="vendor_stmts"
+)
 
 
 
@@ -1838,97 +1963,6 @@ def build_excel(transactions, flags, summary, biz_name, industry_str, province_s
 # ═══════════════════════════════════════════════════════════════════
 # STEP 3: PROCESS
 # ═══════════════════════════════════════════════════════════════════
-# ═══════════════════════════════════════════════════════════════════
-# DEMO MODE — Pre-built sample data, zero API cost
-# ═══════════════════════════════════════════════════════════════════
-with st.expander("🎯 Try a Free Demo — No Upload Required", expanded=False):
-    st.markdown("""
-    **See exactly what BookKeep AI Pro produces** — before uploading your own statement.  
-    This demo uses a realistic TD Business Chequing statement for a construction client (Ontario).  
-    Click below to generate a full 10-tab Excel instantly — **no PDF upload needed, zero API cost.**
-    """)
-    if st.button("🚀 Run Demo Statement", type="primary", use_container_width=True):
-        demo_transactions = [
-            {"date":"2025-01-03","source":"TD Business Chequing","description":"PETRO CANADA #4821 BRAMPTON ON","debit":82.40,"credit":0,"balance":0,"type":"PURCHASE","category":"Motor Vehicle Expense","t2125":"9281","biz_pct":100,"itc_rule":"Full","itc_amount":9.50,"confidence":"95","notes":""},
-            {"date":"2025-01-06","source":"TD Business Chequing","description":"HOME DEPOT #7823 BRAMPTON ON","debit":347.82,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":40.11,"confidence":"92","notes":""},
-            {"date":"2025-01-08","source":"TD Business Chequing","description":"TIM HORTONS #0912 BRAMPTON ON","debit":18.75,"credit":0,"balance":0,"type":"PURCHASE","category":"Meals & Entertainment","t2125":"8523","biz_pct":50,"itc_rule":"50%","itc_amount":1.08,"confidence":"95","notes":"MEALS_50_RULE"},
-            {"date":"2025-01-10","source":"TD Business Chequing","description":"WSIB ONTARIO PMT 28374","debit":420.00,"credit":0,"balance":0,"type":"FEE","category":"Government Remittances","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
-            {"date":"2025-01-12","source":"TD Business Chequing","description":"AMZN MKTP CA*Z99335U2","debit":124.99,"credit":0,"balance":0,"type":"PURCHASE","category":"\u2753 Uncategorized","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"65","notes":"VERIFY_RECEIPT_AMAZON"},
-            {"date":"2025-01-14","source":"TD Business Chequing","description":"COSTCO WHOLESALE W126 MISSISSAUGA ON","debit":231.74,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":26.71,"confidence":"91","notes":""},
-            {"date":"2025-01-15","source":"TD Business Chequing","description":"INTERAC E-TFR MIKE JOHNSON","debit":650.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Subcontracts","t2125":"8590","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"88","notes":"T5018_CANDIDATE"},
-            {"date":"2025-01-17","source":"TD Business Chequing","description":"BELL CANADA 8003102355","debit":89.99,"credit":0,"balance":0,"type":"PURCHASE","category":"Utilities","t2125":"8220","biz_pct":100,"itc_rule":"Full","itc_amount":10.37,"confidence":"95","notes":""},
-            {"date":"2025-01-20","source":"TD Business Chequing","description":"RONA #7234 BRAMPTON ON","debit":412.55,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":47.55,"confidence":"93","notes":""},
-            {"date":"2025-01-22","source":"TD Business Chequing","description":"CANADIAN TIRE #0234 BRAMPTON ON","debit":156.30,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":18.02,"confidence":"88","notes":""},
-            {"date":"2025-01-24","source":"TD Business Chequing","description":"DEWALT TOOLS #8831 TORONTO ON","debit":612.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":70.55,"confidence":"93","notes":"CCA_ASSET CCA_CLASS_8"},
-            {"date":"2025-01-25","source":"TD Business Chequing","description":"TD SERVICE FEE","debit":16.95,"credit":0,"balance":0,"type":"FEE","category":"Bank Charges","t2125":"8710","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
-            {"date":"2025-01-27","source":"TD Business Chequing","description":"WALMART #3821 BRAMPTON ON","debit":87.43,"credit":0,"balance":0,"type":"PURCHASE","category":"\u2753 Uncategorized","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"62","notes":""},
-            {"date":"2025-01-28","source":"TD Business Chequing","description":"ESSO #4421 MISSISSAUGA ON","debit":94.20,"credit":0,"balance":0,"type":"PURCHASE","category":"Motor Vehicle Expense","t2125":"9281","biz_pct":100,"itc_rule":"Full","itc_amount":10.86,"confidence":"95","notes":""},
-            {"date":"2025-01-29","source":"TD Business Chequing","description":"SUBWAY #32981 BRAMPTON ON","debit":23.45,"credit":0,"balance":0,"type":"PURCHASE","category":"Meals & Entertainment","t2125":"8523","biz_pct":50,"itc_rule":"50%","itc_amount":1.35,"confidence":"95","notes":"MEALS_50_RULE"},
-            {"date":"2025-01-30","source":"TD Business Chequing","description":"E-TRANSFER RECEIVED CLIENT PMT","debit":0,"credit":4500.00,"balance":0,"type":"PAYMENT","category":"","t2125":"","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"95","notes":""},
-            {"date":"2025-01-31","source":"TD Business Chequing","description":"HOME DEPOT #7823 BRAMPTON ON","debit":189.90,"credit":0,"balance":0,"type":"PURCHASE","category":"Materials & Supplies","t2125":"8811","biz_pct":100,"itc_rule":"Full","itc_amount":21.89,"confidence":"92","notes":""},
-            {"date":"2025-02-03","source":"TD Business Chequing","description":"INTERAC E-TFR STEVE WILLIAMS","debit":800.00,"credit":0,"balance":0,"type":"PURCHASE","category":"Subcontracts","t2125":"8590","biz_pct":100,"itc_rule":"No","itc_amount":0,"confidence":"88","notes":"T5018_CANDIDATE"},
-            {"date":"2025-02-05","source":"TD Business Chequing","description":"STAPLES #1234 BRAMPTON ON","debit":67.80,"credit":0,"balance":0,"type":"PURCHASE","category":"Office Supplies","t2125":"8810","biz_pct":100,"itc_rule":"Full","itc_amount":7.81,"confidence":"94","notes":""},
-            {"date":"2025-02-07","source":"TD Business Chequing","description":"HYDRO ONE NETWORKS INC","debit":234.56,"credit":0,"balance":0,"type":"PURCHASE","category":"Utilities","t2125":"8220","biz_pct":100,"itc_rule":"Full","itc_amount":27.03,"confidence":"95","notes":""},
-        ]
-
-        demo_t5018 = [
-            {"payee":"MIKE JOHNSON","count":1,"total":650.00,"t5018_required":True},
-            {"payee":"STEVE WILLIAMS","count":1,"total":800.00,"t5018_required":True},
-        ]
-
-        T2125_MAP = {
-            "Motor Vehicle Expense": "9281", "Meals & Entertainment": "8523",
-            "Office Supplies": "8810", "Utilities": "8220", "Bank Charges": "8710",
-            "Insurance": "8690", "Materials & Supplies": "8811", "Rent": "8910",
-            "Delivery & Shipping": "8730", "Advertising": "8520",
-            "Travel": "9200", "Professional Fees": "8860", "Subcontracts": "8590",
-            "Cost of Goods": "8320", "Repairs & Maintenance": "8960",
-        }
-        BIZ_USE = {"Motor Vehicle Expense": 100, "Meals & Entertainment": 50, "Owner Draw / Personal": 0}
-
-        _wb = build_excel(
-            demo_transactions, [],
-            {"period": "Jan-Feb 2025", "transactions": str(len(demo_transactions))},
-            "Demo Construction Co.", "Construction/Trades", "Ontario", "Jan-Feb 2025",
-            recon_matches=None, recon_unmatched=None, receipt_matches=None,
-            invoice_data=None, validation_results=None,
-            t5018_data=demo_t5018, validation_report=None,
-            anomalies=None, audit_trail=None
-        )
-
-        import io as _io
-        _buf = _io.BytesIO()
-        _wb.save(_buf)
-        _buf.seek(0)
-
-        total_exp_d = sum(t["debit"] for t in demo_transactions if t["debit"])
-        total_itc_d = sum(t.get("itc_amount",0) for t in demo_transactions)
-        needs_review_d = len([t for t in demo_transactions if "Uncategorized" in t.get("category","")])
-
-        st.success(f"\u2705 Demo complete! {len(demo_transactions)} transactions — 10-tab Excel ready to download.")
-        _dc1, _dc2, _dc3, _dc4 = st.columns(4)
-        _dc1.metric("Transactions", len(demo_transactions))
-        _dc2.metric("Total Expenses", f"${total_exp_d:,.2f}")
-        _dc3.metric("HST ITC Claimable", f"${total_itc_d:,.2f}")
-        _dc4.metric("Needs Review", needs_review_d)
-
-        st.info("\U0001f4cb **2 T5018 subcontractor payments** flagged (Mike Johnson $650 + Steve Williams $800) · **1 CCA asset** detected (DeWalt Tools $612 \u2192 Class 8) · **2 items** in Needs Review (Amazon + Walmart \u2014 ambiguous without receipts)")
-
-        st.download_button(
-            "\u2b07\ufe0f Download Demo Excel \u2014 10 Tabs, CRA-Ready",
-            data=_buf,
-            file_name=f"Demo_Construction_BookKeepAI_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            type="primary",
-            use_container_width=True
-        )
-        st.markdown("---")
-        st.markdown("**Ready to process your own statement?** Upload a PDF above and click Process Statement \u2014 results in under 2 minutes.")
-
-
-
-# ── STEP 1: BUSINESS INFO ──────────────────────────────────────────
-
 st.header("3️⃣ Generate Report")
 
 if st.button("🚀 Process Statement(s)", type="primary", use_container_width=True):
@@ -2341,6 +2375,30 @@ if st.button("🚀 Process Statement(s)", type="primary", use_container_width=Tr
             invoice_data, inv_cost = process_invoices(invoice_files, client, model_id, system_config, rate_in, rate_out)
             total_cost += inv_cost
         st.success(f"📋 Invoices: {len(invoice_data)} | AP: ${sum(i.get('total',0) for i in invoice_data):,.2f}")
+
+    # ── VENDOR STATEMENTS (v3.12 — line-item categorization) ──────────────
+    vendor_items = []
+    if vendor_statement_files:
+        with st.spinner(f"🏪 Processing {len(vendor_statement_files)} vendor statement(s) — extracting line items..."):
+            prov_code = normalize_province(province_override) if province_override != "Auto-Detect" else province
+            vendor_items, vendor_cost = process_vendor_statements(
+                vendor_statement_files,
+                all_categorized,          # modified in-place: upgrades Uncategorized bank txns
+                industry,
+                prov_code,
+                client, model_id, rate_in, rate_out,
+                period
+            )
+            total_cost += vendor_cost
+        matched_vendor = sum(1 for i in vendor_items if i.get("matched_txn"))
+        uncat_resolved = sum(1 for t in all_categorized if "CAT_FROM_VENDOR_STMT" in t.get("notes",""))
+        st.success(
+            f"🏪 Vendor statements: {len(vendor_items)} line items extracted | "
+            f"{matched_vendor} matched to bank transactions | "
+            f"{uncat_resolved} bank transactions upgraded from Uncategorized"
+        )
+        if vendor_cost > 0:
+            st.caption(f"Vendor PDF processing cost: ${vendor_cost:.4f}")
 
     # ── FULL RECONCILIATION ──
     recon_matches = []
@@ -3018,6 +3076,7 @@ if st.button("🚀 Process Statement(s)", type="primary", use_container_width=Tr
     st.session_state.recon_duplicates = recon_duplicates
     st.session_state.receipt_matches = receipt_matches
     st.session_state.invoice_data = invoice_data
+    st.session_state.vendor_items = vendor_items
     st.session_state.validation_results = validation_results
     st.session_state.audit_trail = audit_trail
     # v3.3 new fields
@@ -3076,6 +3135,24 @@ if st.session_state.transactions:
     conf_color = "green" if extraction_confidence >= 85 else "orange" if extraction_confidence >= 70 else "red"
     st.markdown(f"### Extraction Confidence: :{conf_color}[**{extraction_confidence}%**]")
 
+    # ── v3.12: CRA COMPLIANCE SCORE ──────────────────────────────────
+    prov_display = province_override if province_override != "Auto-Detect" else "ON"
+    compliance_result = compute_compliance_score(
+        transactions       = txns,
+        industry           = industry,
+        business_structure = business_structure,
+        province           = prov_display,
+        period             = period,
+        validation_results = st.session_state.get("validation_results", []),
+        recon_matches      = st.session_state.get("recon_matches", []),
+        recon_unmatched    = st.session_state.get("recon_unmatched", []),
+        receipt_matches    = st.session_state.get("receipt_matches", []),
+        t5018_data         = st.session_state.get("t5018_data", []),
+        anomalies          = st.session_state.get("anomalies", []),
+    )
+    render_compliance_report(compliance_result, st)
+    st.session_state.compliance_result = compliance_result
+
     prov_display = province_override if province_override != "Auto-Detect" else "ON"
     wb = build_excel(txns, [], st.session_state.summary, business_name, industry, prov_display, period,
                      st.session_state.get("recon_matches"), st.session_state.get("recon_unmatched"),
@@ -3083,16 +3160,36 @@ if st.session_state.transactions:
                      st.session_state.get("validation_results"),
                      st.session_state.get("t5018_data"), st.session_state.get("validation_report"),
                      st.session_state.get("anomalies"), st.session_state.get("audit_trail"))
+    # v3.12: Add vendor line items tab if vendor statements were uploaded
+    if st.session_state.get("vendor_items"):
+        add_vendor_items_tab(wb, st.session_state.vendor_items)
     safe = "".join(c for c in business_name if c.isalnum() or c in " -_").strip()
     fname = f"{safe}_BookKeepAI_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
 
     tab_count = 7 + sum(1 for x in [st.session_state.get("recon_matches"), st.session_state.get("receipt_matches"),
         st.session_state.get("invoice_data"), st.session_state.get("validation_results"),
-        st.session_state.get("t5018_data"), st.session_state.get("validation_report")] if x)
+        st.session_state.get("t5018_data"), st.session_state.get("validation_report"),
+        st.session_state.get("vendor_items")] if x)
     st.download_button(f"⬇️ Download Excel — {len(txns)} transactions, {tab_count} tabs",
         data=buf, file_name=fname, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         type="primary", use_container_width=True)
+
+    # v3.12: Save to client record
+    _stmt_meta = {
+        "bank":                  st.session_state.get("detected_bank", ""),
+        "province":              prov_display,
+        "industry":              industry,
+        "business_structure":    business_structure,
+        "file_names":            [f.name for f in (statement_files or [])],
+        "extraction_confidence": extraction_confidence,
+        "api_cost":              st.session_state.get("total_cost", 0),
+        "statement_notes":       (
+            f"Processed {datetime.now().strftime('%d-%b-%Y %H:%M')} | "
+            f"Compliance: {compliance_result.get('score',0)}/100 {compliance_result.get('grade','')}"
+        ),
+    }
+    render_save_button(business_name, txns, period, _stmt_meta, st)
 
     # v3.7: QuickBooks / Xero CSV export
     with st.expander("📤 Export to Accounting Software (QuickBooks / Xero)"):
@@ -3142,6 +3239,40 @@ if st.session_state.transactions:
         with st.expander("📊 Expense Anomalies"):
             import pandas as pd
             st.dataframe(pd.DataFrame(st.session_state.anomalies), use_container_width=True)
+
+    # v3.12: Vendor Line Items summary
+    if st.session_state.get("vendor_items"):
+        vendor_items_display = st.session_state.vendor_items
+        matched_v = sum(1 for i in vendor_items_display if i.get("matched_txn"))
+        uncat_v   = sum(1 for i in vendor_items_display if i.get("category") == "❓ Uncategorized")
+        with st.expander(f"🏪 Vendor Line Items — {len(vendor_items_display)} items, {matched_v} matched to bank ({uncat_v} need review)"):
+            import pandas as pd
+            st.caption(
+                "Line items extracted from your vendor statements (Amazon Business, Costco, Home Depot, etc.). "
+                "Green = high confidence | Yellow = review suggested | Red = needs receipt. "
+                "Items matched to bank transactions have upgraded their bank transaction category."
+            )
+            df_vendor = pd.DataFrame([{
+                "Vendor":          i.get("vendor",""),
+                "Date":            i.get("date",""),
+                "Description":     i.get("description",""),
+                "Vendor Category": i.get("vendor_category",""),
+                "Amount":          f'${i.get("amount",0):,.2f}',
+                "HST":             f'${i.get("tax",0):,.2f}',
+                "CRA Category":    i.get("category",""),
+                "T2125":           i.get("t2125",""),
+                "Confidence":      i.get("confidence",""),
+                "Matched Txn":     i.get("matched_txn") or "⚠️ Unmatched",
+            } for i in vendor_items_display])
+            st.dataframe(df_vendor, use_container_width=True)
+            # Summary by category
+            cat_totals = {}
+            for i in vendor_items_display:
+                cat = i.get("category","❓ Uncategorized")
+                cat_totals[cat] = cat_totals.get(cat, 0) + i.get("amount", 0)
+            st.markdown("**By Category:**")
+            for cat, total in sorted(cat_totals.items(), key=lambda x: -x[1]):
+                st.caption(f"  {cat}: ${total:,.2f}")
 
     # v3.5: Audit Trail — split into Financial and Cosmetic changes
     audit = st.session_state.get("audit_trail", [])
