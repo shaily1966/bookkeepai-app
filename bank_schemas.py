@@ -1158,78 +1158,239 @@ def apply_industry_remaps(transactions, industry):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# MERCHANT PATTERNS
+# MERCHANT PATTERNS — 3-Tier System (v3.12)
+#
+# TIER 1: Deterministic — always correct regardless of industry.
+#         Single category, no industry lookup needed.
+#
+# TIER 2: Industry-mapped — correct answer depends on client industry.
+#         "tier": 2, "industry_map": {industry: category, "default": category}
+#         pre_categorize_merchant() resolves using industry param.
+#
+# TIER 3: Always Needs Review — genuinely unknowable from description.
+#         "tier": 3, "category": "❓ Uncategorized"
+#         Receipt or vendor statement required to categorize correctly.
 # ═══════════════════════════════════════════════════════════════════
 
 CANADIAN_MERCHANT_PATTERNS = {
+
+    # ── TIER 1: GAS STATIONS ─────────────────────────────────────────
     r'(?:PETRO.?CAN|PETRO CANADA|ESSO|SHELL|PIONEER|ULTRAMAR|HUSKY|CO-OP GAS|GAS BAR|GASBAR|ESSENCE|FUEL|PARKLAND|MACS|CIRCLE K|COUCHE.?TARD|MOBIL|SUNOCO|CANADIAN TIRE GAS|CDN TIRE GAS|CT GAS|DOMO|FLYING J|PILOT|7.?ELEVEN.*GAS|SUNCOR|PETROLIA|SUPERSTORE GAS|COSTCO GAS|ONROUTE|MAWS FUEL|JIFFY LUBE|MR LUBE|OIL CHANGE)': {
-        "category": "Motor Vehicle Expense", "t2125": "9281", "itc": "Full"},
+        "tier": 1, "category": "Motor Vehicle Expense", "t2125": "9281", "itc": "Full"},
+
+    # ── TIER 1: RESTAURANTS / FOOD SERVICE ───────────────────────────
     r'(?:TIM HORTON|STARBUCKS|MCDONALDS|MCDONALD\'?S|MC DONALD|SUBWAY|A\&W|WENDYS|WENDY|HARVEYS|SWISS CHALET|BOSTON PIZZA|MONTANA|PIZZA PIZZA|POPEYES|MARY BROWN|KFC|BURGER KING|TACO BELL|DAIRY QUEEN|DQ |DOMINO|PIZZA HUT|PANERA|CHIPOTLE|FIVE GUYS|FATBURGER|NANDOS|NANDO|OSMOW|SHAWARMA|PITA PIT|BOOSTER JUICE|SECOND CUP|BLENZ|COUNTRY STYLE|VISCONTI|PIZZA NOVA|241 PIZZA|PIZZA DELIGHT|TOPPER\'?S|SUNSET GRILL|GOLDEN GRIDDLE|MUCHO BURRITO|QUESADA|NEW YORK FRIES|HERO CERTIFIED|CAGE AUX SPORTS|ST-HUBERT|SCORES|GRECO|ALICE FAZOOLI|ESPLANADE BIER|SHOELESS JOE|BIER MARKT|COFFEE|CAFE|DINER|GRILL|\bREST(?:AURANT)?\b|STEAKHOUSE|SUSHI|THAI|CHINESE|INDIAN|MEXICAN|ITALIAN|GREEK|KOREAN|JAPANESE|VIETNAM|RAMEN|PHO|EARLS|MILESTONES|JACK ASTOR|KELSEY|EAST SIDE|CACTUS CLUB|MOXIE|ORIGINAL JOE|JOEYS|WHITE SPOT|DENNY|IHOP|CORA|SYMPOSIUM|WILD WING|ST.?LOUIS|LONE STAR|MANDARIN|PICKLE BARREL|SPRING ROLL|WINGS|PUB(?:\b|\s)|LOUNGE|BISTRO|BRASSERIE|KITCHEN|EATERY|TRATTORIA|OSTERIA|SMOKE.?S POUTINERIE|CASEY\'?S|THE HUB)': {
-        "category": "Meals & Entertainment", "t2125": "8523", "itc": "50%"},
-    # COSTCO WHOLESALE/WAREHOUSE on a business card = bulk business supplies.
-    # Triangle MC format: 'COSTCO WHOLESALE W1261 WOODBRIDGE ON' or 'COSTCO GAS W1261 VAUGHAN ON'
-    # Costco Gas already captured by Motor Vehicle Expense pattern above.
-    r'(?:COSTCO WHOLESALE|COSTCO WAREHOUSE|COSTCO\s+W\d+)': {
-        "category": "Materials & Supplies", "t2125": "8811", "itc": "Full"},
-    r'(?:LOBLAWS|NO FRILLS|METRO(?:\s|$)|SOBEYS|FRESHCO|FOOD BASICS|FORTINOS|REAL CDN|REAL CANADIAN|WALMART(?!\s*TIRE)|SHOPPERS|LONGOS|FARM BOY|T\&T|NATIONS|OCEANS|SUPERSTORE|VALU.?MART|YOUR IND|INDEPENDENT|VOILA|INSTACART|SKIP THE DISHES|DOORDASH|UBER EATS|GROCERY|BULK BARN|DOLLARAMA|DOLLAR TREE)': {
-        "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
-    r'(?:HOME DEPOT|LOWES|LOWE\'?S|RONA|HOME HARDWARE|KENT|CASTLE|BMR|TIMBER MART|TOTEM|SLEGG|PATRICIAN|FASTENAL|GRAINGER|ACKLANDS|WURTH|HILTI|ULINE|CANAC|PRINCESS AUTO|TSC STORE|TRACTOR SUPPLY|RITCHIE BROS|HEAVY EQUIP)': {
-        "category": "Materials & Supplies", "t2125": "8811", "itc": "Full"},
+        "tier": 1, "category": "Meals & Entertainment", "t2125": "8523", "itc": "50%"},
+
+    # ── TIER 1: TELECOMS ─────────────────────────────────────────────
     r'(?:ROGERS|BELL\b|BELL CANADA|TELUS|FIDO|KOODO|VIRGIN|FREEDOM|SHAW|COGECO|VIDEOTRON|XPLORNET|TEKSAVVY|EXECULINK|START\.CA|PRIMUS|DISTRIBUTEL|CHATR|LUCKY MOBILE|PUBLIC MOBILE|FIZZ)': {
-        "category": "Utilities", "t2125": "8220", "itc": "Full"},
+        "tier": 1, "category": "Utilities", "t2125": "8220", "itc": "Full"},
+
+    # ── TIER 1: UTILITIES ────────────────────────────────────────────
     r'(?:HYDRO|ENBRIDGE|UNION GAS|TORONTO HYDRO|ALECTRA|FORTIS|HYDRO.?QU|BC HYDRO|EPCOR|ESSEX POWER|LONDON HYDRO|KITCHENER UTIL|WATERLOO NORTH|PEEL WATER|YORK REGION|DURHAM REGION|DIRECT ENERGY|JUST ENERGY)': {
-        "category": "Utilities", "t2125": "8220", "itc": "Full"},
+        "tier": 1, "category": "Utilities", "t2125": "8220", "itc": "Full"},
+
+    # ── TIER 1: INSURANCE ────────────────────────────────────────────
     r'(?:MANULIFE|SUN LIFE|GREAT.?WEST|INTACT|AVIVA|DESJARDINS INS|CO-OP.*INS|WAWANESA|ECONOMICAL|PEMBRIDGE|RSA |ZURICH|AIG|CHUBB|TRAVELERS|ALLSTATE|STATE FARM|BELAIR|INDUSTRIAL ALLIANCE|EQUITABLE|EMPIRE LIFE|INSURANCE|INSUR)': {
-        "category": "Insurance", "t2125": "8690", "itc": "No"},
-    r'(?:STAPLES|BUREAU EN GROS|BEST BUY|CANADA COMP|MICRO CENTER|MEMORY EXPRESS|NEWEGG|APPLE\.COM|APPLE STORE|DELL|LENOVO|MICROSOFT|ADOBE|GOOGLE.*CLOUD|AWS|DROPBOX|ZOOM|SLACK|NOTION|CANVA|INTUIT|QUICKBOOKS|XERO|FRESHBOOKS|WAVE|MAILCHIMP|HUBSPOT|SQUARESPACE|WIX|GODADDY|NAMECHEAP|OFFICE DEPOT|GRAND AND TOY)': {
-        "category": "Office Supplies", "t2125": "8810", "itc": "Full"},
-    r'(?:AMAZON|AMZN|AMZ\*)': {
-        "category": "Office Supplies", "t2125": "8810", "itc": "Full", "low_confidence_industries": ["Construction/Trades"]},
-    r'(?:PRESTO|TTC|METROLINX|GO TRANSIT|OC TRANSPO|UBER(?!\s*EATS)|LYFT|TAXI|CAB|PARKING|IMPARK|GREEN P|INDIGO PARK|DIAMOND PARK|407 ETR|HIGHWAY|TOLL|CAR WASH|AUTO SPA)': {
-        "category": "Motor Vehicle Expense", "t2125": "9281", "itc": "Full"},
-    r'(?:MONTHLY FEE|SERVICE CHARGE|NSF|OVERDRAFT|INTEREST CHARGE[S]?|CHQ ORDER|ANNUAL FEE|MEMBERSHIP FEE|CONVENIENCE FEE|WIRE FEE|TRANSFER FEE|FRAIS D\.INTER|BANK FEE)': {
-        "category": "Bank Charges", "t2125": "8710", "itc": "No"},
-    r'(?:CRA|CANADA REVENUE|GOV.*CANADA|SERVICE CANADA|SERVICE ONTARIO|ICBC|SAAQ|WSIB|EHT|PAYROLL REMIT|HST REMIT|GST REMIT|CPP |EI PREMIUM)': {
-        "category": "Government Remittances", "t2125": "", "itc": "No"},
-    r'(?:GOOGLE ADS|FACEBOOK|META ADS|INSTAGRAM|TIKTOK ADS|LINKEDIN|TWITTER|YELP|YELLOW PAGES|YP\.CA|KIJIJI|MARKETPLACE|GOOGLE.*ADWORDS|FACEBK|FB ADS|CANVA PRO|HOOTSUITE|CONSTANT CONTACT|VISTAPRINT|MOO\.COM|SIGN|BANNER|PRINT SHOP)': {
-        "category": "Advertising", "t2125": "8520", "itc": "Full"},
+        "tier": 1, "category": "Insurance", "t2125": "8690", "itc": "No"},
+
+    # ── TIER 1: BANK CHARGES / FEES ──────────────────────────────────
+    r'(?:MONTHLY FEE|SERVICE CHARGE|NSF|OVERDRAFT|INTEREST CHARGE[S]?|CHQ ORDER|ANNUAL FEE|MEMBERSHIP FEE|CONVENIENCE FEE|WIRE FEE|TRANSFER FEE|FRAIS D\.INTER|BANK FEE|FINANCE CHARGE CREDIT|INTEREST ADJUSTMENT|INTEREST CREDIT|FRAIS FINANC)': {
+        "tier": 1, "category": "Bank Charges", "t2125": "8710", "itc": "No"},
+
+    # ── TIER 1: PAYMENT PROCESSORS (fees) — FIX: was wrongly Office Supplies ──
+    # Stripe/Square/PayPal charge processing fees = Bank Charges (T2125 8710), ITC exempt
+    r'(?:STRIPE|SQUARE|PAYPAL FEE|PP\*FEE|SQUARE.*FEE|STRIPE.*FEE)': {
+        "tier": 1, "category": "Bank Charges", "t2125": "8710", "itc": "No"},
+
+    # ── TIER 1: SAAS / TECH PLATFORMS (subscriptions) ────────────────
+    # Shopify/Lightspeed/Clover/Toast are SaaS subscriptions = Office Supplies, ITC claimable
+    r'(?:CHATGPT|OPENAI|ANTHROPIC|GITHUB|HEROKU|DIGITAL OCEAN|LINODE|VULTR|CLOUDFLARE|SHOPIFY|CLOVER|LIGHTSPEED|TOAST)': {
+        "tier": 1, "category": "Office Supplies", "t2125": "8810", "itc": "Full"},
+
+    # ── TIER 1: PURE OFFICE / SOFTWARE ───────────────────────────────
+    r'(?:STAPLES|BUREAU EN GROS|CANADA COMP|MICRO CENTER|MEMORY EXPRESS|NEWEGG|DELL|LENOVO|MICROSOFT|ADOBE|DROPBOX|ZOOM|SLACK|NOTION|CANVA|INTUIT|QUICKBOOKS|XERO|FRESHBOOKS|WAVE|MAILCHIMP|HUBSPOT|SQUARESPACE|WIX|GODADDY|NAMECHEAP|OFFICE DEPOT|GRAND AND TOY)': {
+        "tier": 1, "category": "Office Supplies", "t2125": "8810", "itc": "Full"},
+
+    # ── TIER 1: GOVERNMENT REMITTANCES ───────────────────────────────
+    r'(?:CANADA REVENUE|GOV.*CANADA|SERVICE CANADA|SERVICE ONTARIO|ICBC|SAAQ|WSIB|EHT|PAYROLL REMIT|HST REMIT|GST REMIT|CPP |EI PREMIUM|\bCRA\b)': {
+        "tier": 1, "category": "Government Remittances", "t2125": "", "itc": "No"},
+
+    # ── TIER 1: ADVERTISING ──────────────────────────────────────────
+    r'(?:GOOGLE ADS|FACEBOOK|META ADS|INSTAGRAM|TIKTOK ADS|LINKEDIN|TWITTER|YELP|YELLOW PAGES|YP\.CA|KIJIJI|GOOGLE.*ADWORDS|FACEBK|FB ADS|CANVA PRO|HOOTSUITE|CONSTANT CONTACT|VISTAPRINT|MOO\.COM|PRINT SHOP)': {
+        "tier": 1, "category": "Advertising", "t2125": "8520", "itc": "Full"},
+
+    # ── TIER 1: SHIPPING / COURIERS ──────────────────────────────────
     r'(?:CANADA POST|PUROLATOR|UPS|FEDEX|DHL|CANPAR|LOOMIS|DICOM|DAY \& ROSS|ESTES|XPO|SHIP)': {
-        "category": "Delivery & Shipping", "t2125": "8730", "itc": "Full"},
-    r'(?:AIR CANADA|WESTJET|PORTER|FLAIR|SWOOP|SUNWING|BOOKING\.COM|HOTELS\.COM|AIRBNB|VRBO|MARRIOTT|HILTON|HOLIDAY INN|BEST WESTERN|COMFORT INN|SUPER 8|DAYS INN|MOTEL|HOTEL|ENTERPRISE|HERTZ|AVIS|BUDGET|NATIONAL CAR|THRIFTY)': {
-        "category": "Travel", "t2125": "9200", "itc": "Full"},
+        "tier": 1, "category": "Delivery & Shipping", "t2125": "8730", "itc": "Full"},
+
+    # ── TIER 1: TRAVEL ───────────────────────────────────────────────
+    r'(?:AIR CANADA|WESTJET|PORTER|FLAIR|SWOOP|SUNWING|BOOKING\.COM|HOTELS\.COM|VRBO|MARRIOTT|HILTON|HOLIDAY INN|BEST WESTERN|COMFORT INN|SUPER 8|DAYS INN|MOTEL|HOTEL|ENTERPRISE|HERTZ|AVIS|BUDGET|NATIONAL CAR|THRIFTY)': {
+        "tier": 1, "category": "Travel", "t2125": "9200", "itc": "Full"},
+
+    # ── TIER 1: PROFESSIONAL FEES ────────────────────────────────────
     r'(?:LAW\s|LEGAL|LAWYER|BARRIST|SOLICITOR|NOTARY|ACCOUNTING|ACCOUNTANT|CPA\b|BOOKKEEP|TAX PREP|H\&R BLOCK|TURBOTAX|WEALTHSIMPLE TAX|ARCHITECT|ENGINEER|CONSULT|SURVEYOR)': {
-        "category": "Professional Fees", "t2125": "8860", "itc": "Full"},
-    r'(?:NETFLIX|SPOTIFY|DISNEY\+|APPLE MUSIC|YOUTUBE|CRAVE|AMAZON PRIME|PARAMOUNT|NINTENDO|PLAYSTATION|XBOX|STEAM|CINEMA|CINEPLEX|LANDMARK|AMC|BOWLING|GOLF|GYM|FITNESS|GOODLIFE|FIT4LESS|PLANET FITNESS|YOGA|LCBO|BEER STORE|WINE RACK|CANNABIS|OCS\b|SQDC)': {
-        "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
-    r'(?:PHARMACY|PHARMA|REXALL|JEAN COUTU|LONDON DRUGS|MEDICAL|CLINIC|DENTAL|DENTIST|OPTOM|CHIRO|PHYSIO|MASSAGE|DR\.\s|DOCTOR|HOSPITAL|HEALTH|LIFELAB|DYNACARE)': {
-        "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
-    r'(?:OLD NAVY|GAP\b|H\&M|ZARA|WINNERS|MARSHALLS|HOMESENSE|HUDSON BAY|THE BAY|NORDSTROM|SIMONS|SPORT CHEK|ATMOSPHERE|MARKS\b|MARK\'S|NIKE|ADIDAS|FOOT LOCKER|ALDO|ROOTS|LULULEMON|ARITZIA)': {
-        "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
-    r'(?:CHATGPT|OPENAI|ANTHROPIC|GITHUB|HEROKU|DIGITAL OCEAN|LINODE|VULTR|CLOUDFLARE|SHOPIFY|STRIPE|SQUARE|PAYPAL FEE|CLOVER|LIGHTSPEED|TOAST)': {
-        "category": "Office Supplies", "t2125": "8810", "itc": "Full"},
-    r'(?:RENT\b|LEASE\b|LANDLORD|PROPERTY MGMT|MANAGEMENT.*PROPERTY|CONDO FEE|MAINTENANCE FEE)': {
-        "category": "Rent", "t2125": "8910", "itc": "Full"},
-    r'(?:CANADIAN TIRE(?!\s*GAS)|CDN TIRE STORE|CDN TIRE (?!GAS)|CT\s|PARTY CITY)': {
-        "category": "Materials & Supplies", "t2125": "8811", "itc": "Full"},
+        "tier": 1, "category": "Professional Fees", "t2125": "8860", "itc": "Full"},
+
+    # ── TIER 1: VEHICLE REPAIR / AUTO PARTS ─────────────────────────
     r'(?:NAPA|AUTOZONE|PARTSOURCE|LORDCO|MIDAS|MEINEKE|AAMCO|SPEEDY|ACTIVE GREEN|OK TIRE|KAL TIRE|FOUNTAIN TIRE|CANADIAN TIRE AUTOMOTIVE|CT AUTO|BRAKE|EXHAUST|TRANSMISS|MECHANIC|AUTO REPAIR|AUTO SERVICE)': {
-        "category": "Motor Vehicle Expense", "t2125": "9281", "itc": "Full"},
-    r'(?:MARKS WORK|WORK AUTHORITY|SAFETYZONE|SAFETY|WORKWEAR|BOOT|STEEL TOE|COVERALL|HI.?VIS)': {
-        "category": "Materials & Supplies", "t2125": "8811", "itc": "Full"},
-    # Finance charge credit / interest adjustment = Bank Charges credit (refund of interest)
-    r'(?:FINANCE CHARGE CREDIT|INTEREST ADJUSTMENT|INTEREST CREDIT|FRAIS FINANC)': {
-        "category": "Bank Charges", "t2125": "8710", "itc": "No"},
-    # ScotiaBank / TELESCOTIA payment processor — payment, not a purchase
+        "tier": 1, "category": "Motor Vehicle Expense", "t2125": "9281", "itc": "Full"},
+
+    # ── TIER 1: TRANSIT / PARKING ────────────────────────────────────
+    r'(?:PRESTO|TTC|METROLINX|GO TRANSIT|OC TRANSPO|UBER(?!\s*EATS)|LYFT|TAXI|CAB|PARKING|IMPARK|GREEN P|INDIGO PARK|DIAMOND PARK|407 ETR|HIGHWAY|TOLL|CAR WASH|AUTO SPA)': {
+        "tier": 1, "category": "Motor Vehicle Expense", "t2125": "9281", "itc": "Full"},
+
+    # ── TIER 1: RENT ─────────────────────────────────────────────────
+    r'(?:RENT\b|LEASE\b|LANDLORD|PROPERTY MGMT|MANAGEMENT.*PROPERTY|CONDO FEE|MAINTENANCE FEE)': {
+        "tier": 1, "category": "Rent", "t2125": "8910", "itc": "Full"},
+
+    # ── TIER 1: WORKWEAR / SAFETY (always Materials regardless of industry) ──
+    # MARKS WORK listed here explicitly — overrides the personal clothing pattern below
+    r'(?:MARKS WORK|WORK AUTHORITY|SAFETYZONE|WORKWEAR|STEEL TOE|COVERALL|HI.?VIS)': {
+        "tier": 1, "category": "Materials & Supplies", "t2125": "8811", "itc": "Full"},
+
+    # ── TIER 1: UNAMBIGUOUSLY PERSONAL ───────────────────────────────
+    r'(?:NETFLIX|SPOTIFY|DISNEY\+|APPLE MUSIC|YOUTUBE|CRAVE|AMAZON PRIME|PARAMOUNT|NINTENDO|PLAYSTATION|XBOX|STEAM|CINEMA|CINEPLEX|LANDMARK|AMC|BOWLING|LCBO|BEER STORE|WINE RACK|CANNABIS|OCS\b|SQDC)': {
+        "tier": 1, "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
+    r'(?:PHARMACY|PHARMA|REXALL|JEAN COUTU|LONDON DRUGS|LIFELAB|DYNACARE)': {
+        "tier": 1, "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
+    # Clothing — NOTE: MARKS/MARK'S intentionally removed — MARKS WORK above takes priority
+    r'(?:OLD NAVY|GAP\b|H\&M|ZARA|WINNERS|MARSHALLS|HOMESENSE|HUDSON BAY|THE BAY|NORDSTROM|SIMONS|SPORT CHEK|ATMOSPHERE|NIKE|ADIDAS|FOOT LOCKER|ALDO|ROOTS|LULULEMON|ARITZIA)': {
+        "tier": 1, "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
+
+    # ── TIER 1: BANK PAYMENT PROCESSORS (internal bank transfers) ────
     r'(?:TELESCOTIA|SCOTIABANK PMT|CIBC BANK PMT|CIBC PMT|RBC PMT|TD PMT|BMO PMT|DESJARDINS PMT|NATIONAL BANK PMT|HSBC PMT|PAIEMENT BCIC|PAYMENT BCIC)': {
-        "category": "Transfers (Ignore)", "t2125": "", "itc": "No"},
-    # Google services — could be Workspace (Office Supplies) or personal (YouTube)
+        "tier": 1, "category": "Transfers (Ignore)", "t2125": "", "itc": "No"},
+
+    # ── TIER 1: GOOGLE — split by sub-service ────────────────────────
     r'(?:GOOGLE \*WORKSPACE|GOOGLE.*DRIVE|GOOGLE.*ADS|GOOGLE.*CLOUD)': {
-        "category": "Office Supplies", "t2125": "8810", "itc": "Full"},
+        "tier": 1, "category": "Office Supplies", "t2125": "8810", "itc": "Full"},
     r'(?:GOOGLE \*YOUTUBE|GOOGLE \*PLAY|GOOGLE \*STADIA|GOOGLE \*ONE STORAGE)': {
-        "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
-    # KDE (Canadian Tire in-store product detail line) → already in Purchases so skip
-    # McDonalds variations
-    r'(?:MCDONALDS|MCDONALD\s?\'?S|MC DONALD)': {
-        "category": "Meals & Entertainment", "t2125": "8523", "itc": "50%"},
+        "tier": 1, "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
+
+    # ── TIER 1: GROCERIES / FOOD DELIVERY (personal default) ─────────
+    # Note: Instacart/Doordash/UberEats may be Cost of Goods for restaurants
+    # but bank statement alone can't distinguish — flag all as personal
+    r'(?:LOBLAWS|NO FRILLS|METRO(?:\s|$)|SOBEYS|FRESHCO|FOOD BASICS|FORTINOS|REAL CDN|REAL CANADIAN|LONGOS|FARM BOY|T\&T|NATIONS|OCEANS|SUPERSTORE|VALU.?MART|YOUR IND|INDEPENDENT|VOILA|INSTACART|SKIP THE DISHES|DOORDASH|UBER EATS|BULK BARN)': {
+        "tier": 1, "category": "Owner Draw / Personal", "t2125": "", "itc": "No"},
+
+    # ── TIER 1: DETERMINISTIC TRADE SUPPLIERS ────────────────────────
+    # These vendors sell exclusively to trades/industry — always Materials
+    r'(?:FASTENAL|GRAINGER|ACKLANDS|WURTH|HILTI|ULINE|RITCHIE BROS|HEAVY EQUIP|RONA|HOME HARDWARE|KENT|CASTLE|BMR|TIMBER MART|TOTEM|SLEGG|PATRICIAN|CANAC|TSC STORE|TRACTOR SUPPLY)': {
+        "tier": 1, "category": "Materials & Supplies", "t2125": "8811", "itc": "Full"},
+
+    # ── TIER 1: AIRBNB — ambiguous but usually travel for business context ──
+    r'(?:AIRBNB)': {
+        "tier": 1, "category": "Travel", "t2125": "9200", "itc": "Full"},
+
+    # ═══════════════════════════════════════════════════════════════
+    # TIER 2: INDUSTRY-MAPPED
+    # Correct answer depends on client industry.
+    # pre_categorize_merchant() resolves using industry_map.
+    # ═══════════════════════════════════════════════════════════════
+
+    # AMAZON — industry + description keyword resolution
+    # AMZN*PRIME / AMAZON PRIME already caught above as personal
+    # AMZN*AWS already caught above as Office Supplies (SaaS pattern)
+    r'(?:AMZN MKTP|AMAZON MKTP)': {
+        "tier": 3,  # Marketplace code — item unknown without receipt
+        "category": "❓ Uncategorized", "t2125": "", "itc": "No",
+        "needs_review_msg": "Amazon Marketplace — product type unknown. Upload Amazon Business CSV or receipt."},
+    r'(?:AMAZON|AMZN|AMZ\*)': {
+        "tier": 2,
+        "industry_map": {
+            "Construction/Trades":   "❓ Uncategorized",   # could be tools or personal
+            "Restaurant/Food":       "❓ Uncategorized",   # could be food supplies or personal
+            "Retail":                "❓ Uncategorized",   # could be inventory or personal
+            "Professional Services": "Office Supplies",    # default reasonable assumption
+            "Rental Properties":     "❓ Uncategorized",
+            "default":               "❓ Uncategorized",
+        },
+        "t2125": "8810", "itc": "Full",
+        "confidence_override": "65",   # always lower confidence for Amazon
+        "needs_review_msg": "Amazon purchase — upload Amazon Business CSV for line-item categorization."},
+
+    # COSTCO WHOLESALE — industry-mapped
+    r'(?:COSTCO WHOLESALE|COSTCO WAREHOUSE|COSTCO\s+W\d+)': {
+        "tier": 2,
+        "industry_map": {
+            "Construction/Trades":   "Materials & Supplies",
+            "Restaurant/Food":       "Cost of Goods",
+            "Retail":                "Cost of Goods",
+            "Professional Services": "Office Supplies",
+            "Rental Properties":     "Materials & Supplies",
+            "default":               "❓ Uncategorized",
+        },
+        "t2125": "8811", "itc": "Full"},
+
+    # HOME DEPOT — industry-mapped
+    r'(?:HOME DEPOT|LOWES|LOWE\'?S|PRINCESS AUTO)': {
+        "tier": 2,
+        "industry_map": {
+            "Construction/Trades":   "Materials & Supplies",
+            "Rental Properties":     "Repairs & Maintenance",
+            "Restaurant/Food":       "❓ Uncategorized",
+            "Retail":                "❓ Uncategorized",
+            "Professional Services": "❓ Uncategorized",
+            "default":               "❓ Uncategorized",
+        },
+        "t2125": "8811", "itc": "Full"},
+
+    # CANADIAN TIRE — industry-mapped (not automotive — that's handled above)
+    r'(?:CANADIAN TIRE(?!\s*(?:GAS|AUTO))|CDN TIRE STORE|CDN TIRE (?!GAS))': {
+        "tier": 2,
+        "industry_map": {
+            "Construction/Trades":   "Materials & Supplies",
+            "Rental Properties":     "Repairs & Maintenance",
+            "Restaurant/Food":       "❓ Uncategorized",
+            "Retail":                "❓ Uncategorized",
+            "Professional Services": "❓ Uncategorized",
+            "default":               "❓ Uncategorized",
+        },
+        "t2125": "8811", "itc": "Full"},
+
+    # SHOPPERS DRUG MART — personal for most, but healthcare businesses may claim
+    r'(?:SHOPPERS|SHOPPERS DRUG|SDM)': {
+        "tier": 2,
+        "industry_map": {
+            "default": "Owner Draw / Personal",
+        },
+        "t2125": "", "itc": "No"},
+
+    # ═══════════════════════════════════════════════════════════════
+    # TIER 3: ALWAYS NEEDS REVIEW
+    # Genuinely unknowable from description alone — receipt required.
+    # ═══════════════════════════════════════════════════════════════
+
+    # WALMART — sells everything; impossible to categorize without receipt
+    r'(?:WALMART(?!\s*TIRE)|WAL-MART(?!\s*TIRE))': {
+        "tier": 3,
+        "category": "❓ Uncategorized", "t2125": "", "itc": "No",
+        "needs_review_msg": "Walmart purchase — business or personal? Upload receipt to confirm."},
+
+    # BEST BUY — electronics could be capital asset, office supply, or personal
+    r'(?:BEST BUY)': {
+        "tier": 3,
+        "category": "❓ Uncategorized", "t2125": "", "itc": "No",
+        "needs_review_msg": "Best Buy — electronics purchase. Business use? Check if CCA asset (≥$500). Upload receipt."},
+
+    # APPLE STORE / APPLE.COM — iPhone=personal, MacBook=could be either, software=Office
+    r'(?:APPLE\.COM|APPLE STORE|APPLE CANADA)': {
+        "tier": 3,
+        "category": "❓ Uncategorized", "t2125": "", "itc": "No",
+        "needs_review_msg": "Apple purchase — device type and business use unknown. Upload receipt."},
+
+    # DOLLARAMA / DOLLAR TREE — could be office supplies or personal
+    r'(?:DOLLARAMA|DOLLAR TREE|DOLLAR GIANT)': {
+        "tier": 3,
+        "category": "❓ Uncategorized", "t2125": "", "itc": "No",
+        "needs_review_msg": "Dollarama/dollar store — office supplies or personal? Upload receipt."},
+
+    # GYM / FITNESS — personal unless running a fitness business
+    r'(?:GYM|FITNESS|GOODLIFE|FIT4LESS|PLANET FITNESS|YOGA)': {
+        "tier": 3,
+        "category": "❓ Uncategorized", "t2125": "", "itc": "No",
+        "needs_review_msg": "Gym/fitness — personal expense unless client is in fitness industry."},
 }
 
 
@@ -1279,7 +1440,7 @@ T2125_LINE_MAP = {
 
 
 # ═══════════════════════════════════════════════════════════════════
-# COMPILED MERCHANT PATTERNS (v3.4)
+# COMPILED MERCHANT PATTERNS (v3.12)
 # Pre-compiled once at module load — ~50x faster for 500+ tx statements
 # ═══════════════════════════════════════════════════════════════════
 
@@ -1308,13 +1469,62 @@ def clean_description(description):
     return desc.strip(' -–—')
 
 
-def pre_categorize_merchant(description):
-    """Uses pre-compiled patterns for performance."""
+def pre_categorize_merchant(description, industry="Other"):
+    """
+    3-Tier merchant categorization (v3.12).
+
+    Tier 1 — Deterministic: always correct, single category, confidence 95.
+    Tier 2 — Industry-mapped: resolves via industry_map lookup, confidence 82.
+    Tier 3 — Needs Review: unknowable without receipt, confidence 55.
+
+    Args:
+        description: raw transaction description string
+        industry:    client industry from UI (default "Other" for backward compat)
+
+    Returns:
+        dict with: category, t2125, itc, confidence, tier
+                   + needs_review_msg for Tier 2/3 where applicable
+        or None if no pattern matched.
+    """
     cleaned = clean_description(description)
+
     for text in [cleaned, description.upper()]:
-        for compiled_pat, cat_info in COMPILED_MERCHANT_PATTERNS:
-            if compiled_pat.search(text):
-                return cat_info.copy()
+        for compiled_pat, info in COMPILED_MERCHANT_PATTERNS:
+            if not compiled_pat.search(text):
+                continue
+
+            tier = info.get("tier", 1)
+            result = info.copy()
+
+            # ── Tier 1: deterministic ────────────────────────────────
+            if tier == 1:
+                result.setdefault("confidence", "95")
+                return result
+
+            # ── Tier 2: industry-mapped ──────────────────────────────
+            if tier == 2:
+                industry_map = info.get("industry_map", {})
+                resolved_cat = (
+                    industry_map.get(industry)
+                    or industry_map.get("default", "❓ Uncategorized")
+                )
+                result["category"] = resolved_cat
+                result["t2125"] = T2125_LINE_MAP.get(resolved_cat, info.get("t2125", ""))
+                if "Uncategorized" in resolved_cat:
+                    result["itc"] = "No"
+                    result["confidence"] = info.get("confidence_override", "65")
+                else:
+                    result["confidence"] = "82"
+                return result
+
+            # ── Tier 3: always needs review ──────────────────────────
+            if tier == 3:
+                result["category"] = "❓ Uncategorized"
+                result["t2125"] = ""
+                result["itc"] = "No"
+                result["confidence"] = "55"
+                return result
+
     return None
 
 
