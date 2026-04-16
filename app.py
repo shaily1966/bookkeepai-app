@@ -10,7 +10,19 @@ from client_data import (
     render_client_history, render_save_button, render_all_clients_dashboard
 )
 from compliance_score import compute_compliance_score, render_compliance_report
+from compliance_report import render_pdf_download_button
+from client_summary import render_client_summary_section
 from db import get_conn, is_postgres, placeholder, upsert_sql, now_sql, create_all_tables
+
+# ── DESKTOP MODE ──────────────────────────────────────────────────────
+# Set by launcher.py when running as desktop app.
+# Online (Railway) version never sets this — runs normally without credits.
+DESKTOP_MODE = os.environ.get("BOOKKEEPAI_DESKTOP", "0") == "1"
+if DESKTOP_MODE:
+    from credits import (
+        get_credit_balance, deduct_credit,
+        render_credits_sidebar, check_credits_gate,
+    )
 
 # ── Ensure all DB tables exist on every startup ──────────────────────
 try:
@@ -481,8 +493,12 @@ with st.sidebar.expander("➕ Add Rule"):
         else:
             st.error("Save failed.")
 
+# ── DESKTOP: Credits sidebar ──────────────────────────────────────────
+if DESKTOP_MODE:
+    render_credits_sidebar(st)
+
 # ── HEADER ──────────────────────────────────────────────────────────
-st.title("📊 BookKeep AI Pro")
+st.title("📊 BookKeep AI Pro" + (" — Desktop Edition" if DESKTOP_MODE else ""))
 st.caption(f"v{VERSION} | 31 Banks & Cards | Client Profiles | Rule Editor | Merchant Normalization | T5018 | CCA Classes | Validation Engine | Claude 4.6 | ~${per_request:.3f}/statement")
 
 # ═══════════════════════════════════════════════════════════════════
@@ -1969,6 +1985,10 @@ if st.button("🚀 Process Statement(s)", type="primary", use_container_width=Tr
     if not statement_files:
         st.error("Upload at least one bank statement."); st.stop()
 
+    # ── DESKTOP: Check credits before processing ──────────────────
+    if DESKTOP_MODE:
+        check_credits_gate(st)  # stops execution if no credits
+
     start = time.time()
     system_prompt = FULL_INSTRUCTIONS if use_full else SMART_CONDENSED
     system_config = [{"type":"text","text":system_prompt,"cache_control":{"type":"ephemeral"}}]
@@ -3068,6 +3088,10 @@ if st.button("🚀 Process Statement(s)", type="primary", use_container_width=Tr
     st.success(detail)
 
     st.session_state.transactions = all_categorized
+
+    # ── DESKTOP: Deduct one credit after successful processing ────
+    if DESKTOP_MODE:
+        deduct_credit(note=f"{business_name} — {len(all_categorized)} transactions")
     st.session_state.flags = []
     st.session_state.summary = {"period": period or period_hint or 'auto', "transactions": str(len(all_categorized))}
     st.session_state.total_cost = total_cost
@@ -3152,6 +3176,19 @@ if st.session_state.transactions:
     )
     render_compliance_report(compliance_result, st)
     st.session_state.compliance_result = compliance_result
+
+    # ── v3.12: CLIENT COMMUNICATION TOOLS ────────────────────────────
+    render_client_summary_section(
+        txns, business_name, period,
+        industry, prov_display,
+        compliance_result.get("score", 0), st
+    )
+
+    # ── v3.12: PDF COMPLIANCE REPORT ─────────────────────────────────
+    render_pdf_download_button(
+        compliance_result, txns, business_name,
+        period, industry, prov_display, st
+    )
 
     prov_display = province_override if province_override != "Auto-Detect" else "ON"
     wb = build_excel(txns, [], st.session_state.summary, business_name, industry, prov_display, period,
